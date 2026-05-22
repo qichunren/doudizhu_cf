@@ -6,6 +6,9 @@ import { Button } from '../ui/Button'
 export class MainMenuScene extends Scene {
   private menuContainer = new Container()
   private roomContainer = new Container()
+  private roomMask!: Graphics
+  private scrollY = 0
+  private maxScroll = 0
   private userInfoText = new Text({
     text: '',
     style: new TextStyle({ fontFamily: 'Arial', fontSize: 18, fill: '#ffffff' }),
@@ -87,10 +90,41 @@ export class MainMenuScene extends Scene {
     roomListTitle.x = width / 2
     roomListTitle.y = height * 0.48
 
-    this.roomContainer.x = width / 2 - 150
-    this.roomContainer.y = height * 0.52
+    const roomListY = height * 0.52
+    const roomListMaxH = Math.max(height * 0.42, 0)
 
-    this.menuContainer.addChild(title, this.userInfoText, createBtn, roomListTitle, this.roomContainer)
+    this.roomContainer.x = width / 2 - 150
+    this.roomContainer.y = roomListY
+
+    this.roomMask = new Graphics()
+    this.roomMask.rect(width / 2 - 150, roomListY, 300, roomListMaxH)
+    this.roomMask.fill({ color: 0x000000 })
+    this.roomContainer.mask = this.roomMask
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      this.scrollY = Math.max(0, Math.min(this.maxScroll, this.scrollY + e.deltaY))
+      this.roomContainer.y = roomListY - this.scrollY
+    }
+    this.app.canvas.addEventListener('wheel', onWheel, { passive: false })
+
+    let dragging = false
+    let lastY = 0
+    this.container.on('pointerdown', (e) => {
+      dragging = true
+      lastY = e.globalY
+    })
+    this.container.on('globalpointermove', (e) => {
+      if (!dragging) return
+      const dy = lastY - e.globalY
+      lastY = e.globalY
+      this.scrollY = Math.max(0, Math.min(this.maxScroll, this.scrollY + dy))
+      this.roomContainer.y = roomListY - this.scrollY
+    })
+    this.container.on('pointerup', () => { dragging = false })
+    this.container.on('pointerupoutside', () => { dragging = false })
+
+    this.menuContainer.addChild(title, this.userInfoText, createBtn, roomListTitle, this.roomMask, this.roomContainer)
   }
 
   private async loadRoomList(): Promise<void> {
@@ -140,6 +174,12 @@ export class MainMenuScene extends Scene {
 
         this.roomContainer.addChild(btn)
       })
+
+      const totalH = rooms.length * 56
+      const visibleH = Math.max(this.app.screen.height * 0.42, 0)
+      this.maxScroll = Math.max(0, totalH - visibleH)
+      this.scrollY = 0
+      this.roomContainer.y = this.app.screen.height * 0.52
     } catch (e) {
       console.error('load room list failed', e)
     }
