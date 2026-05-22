@@ -6,12 +6,151 @@
   <title>斗地主</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #1a6b3c; }
-    #game { width: 100%; height: 100%; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+
+    body {
+      background: #1a6b3c;
+      background-image: radial-gradient(ellipse at center, #2d8c4e 0%, #1a6b3c 60%, #0f3d22 100%);
+      font-family: 'Microsoft YaHei', 'PingFang SC', -apple-system, Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #login-page {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 20px;
+    }
+
+    #login-page.hidden {
+      display: none;
+    }
+
+    .login-card {
+      background: linear-gradient(180deg, #2d8c4e 0%, #1f7a3e 100%);
+      border: 2px solid #ffd700;
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    .login-title {
+      text-align: center;
+      font-size: 40px;
+      font-weight: bold;
+      color: #ffd700;
+      margin-bottom: 32px;
+      text-shadow: 2px 2px 6px rgba(0,0,0,0.4);
+      letter-spacing: 4px;
+    }
+
+    .login-field {
+      margin-bottom: 18px;
+    }
+
+    .login-field label {
+      display: block;
+      color: #e0e0e0;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+
+    .login-field input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid #4a9e6a;
+      border-radius: 8px;
+      font-size: 16px;
+      outline: none;
+      background: #f5faf7;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .login-field input:focus {
+      border-color: #ffd700;
+      box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.2);
+    }
+
+    .login-field input::placeholder {
+      color: #999;
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(180deg, #ffd700 0%, #f0c000 100%);
+      color: #1a6b3c;
+      border: none;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: background 0.2s, transform 0.1s;
+      letter-spacing: 2px;
+    }
+
+    .login-btn:hover {
+      background: linear-gradient(180deg, #ffe44d 0%, #ffd700 100%);
+    }
+
+    .login-btn:active {
+      transform: scale(0.98);
+    }
+
+    .login-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .login-error {
+      color: #ff8a8a;
+      font-size: 14px;
+      text-align: center;
+      margin-top: 14px;
+      min-height: 22px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+
+    #game {
+      width: 100%;
+      height: 100%;
+    }
+
+    #game.hidden {
+      display: none;
+    }
   </style>
 </head>
 <body>
-  <div id="game"></div>
+  <div id="login-page">
+    <div class="login-card">
+      <div class="login-title">斗地主</div>
+      <div class="login-field">
+        <label>账号</label>
+        <input type="text" id="account" placeholder="请输入账号" autocomplete="username" />
+      </div>
+      <div class="login-field">
+        <label>密码</label>
+        <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password" />
+      </div>
+      <div class="login-field">
+        <label>昵称（新用户自动注册）</label>
+        <input type="text" id="nickname" placeholder="选填，默认使用账号" />
+      </div>
+      <button class="login-btn" id="login-btn">登录 / 注册</button>
+      <div class="login-error" id="login-error"></div>
+    </div>
+  </div>
+  <div id="game" class="hidden"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
