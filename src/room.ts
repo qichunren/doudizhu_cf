@@ -172,7 +172,7 @@ export class RoomDO implements DurableObject {
     if (!p) return
 
     p.isReady = true
-    this.broadcast({ action: PushPlayerReady, data: { user_id: p.userId } })
+    this.broadcast({ action: PushPlayerReady, data: { user_id: p.userId, nickname: p.nickname } })
     ws.send(JSON.stringify({ msg_id, action: ActionReady, code: CodeOK, message: 'ok' }))
 
     if (this.players.length === 3 && this.players.every(p => p.isReady)) {
@@ -222,7 +222,7 @@ export class RoomDO implements DurableObject {
 
     this.robBids.push(data.rob)
     this.robCount++
-    this.broadcast({ action: PushRobLandlord, data: { user_id: p.userId, rob: data.rob } })
+    this.broadcast({ action: PushRobLandlord, data: { user_id: p.userId, nickname: p.nickname, rob: data.rob } })
     ws.send(JSON.stringify({ msg_id, action: ActionRobLandlord, code: CodeOK, message: 'ok' }))
 
     if (this.robCount >= 3) {
@@ -330,7 +330,7 @@ export class RoomDO implements DurableObject {
     const remainCount = remaining.length
     this.broadcast({
       action: PushCardPlayed,
-      data: { user_id: p.userId, cards: data.cards, card_type: CardType[group.cardType], remain: remainCount },
+      data: { user_id: p.userId, nickname: p.nickname, cards: data.cards, card_type: CardType[group.cardType], remain: remainCount },
     })
 
     ws.send(JSON.stringify({ msg_id, action: ActionPlayCard, code: CodeOK, message: 'ok', data: { card_type: CardType[group.cardType] } }))
@@ -357,7 +357,7 @@ export class RoomDO implements DurableObject {
     }
 
     this.passCount++
-    this.broadcast({ action: PushPlayerPass, data: { user_id: p.userId } })
+    this.broadcast({ action: PushPlayerPass, data: { user_id: p.userId, nickname: p.nickname } })
     ws.send(JSON.stringify({ msg_id, action: ActionPass, code: CodeOK, message: 'ok' }))
 
     if (this.passCount >= 2) {

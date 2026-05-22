@@ -112,7 +112,7 @@ export class RoomScene extends Scene {
   private onPlayerReady(d: any): void {
     const p = this.players.find(p => p.userId === d.user_id)
     if (p) p.ready = true
-    this.infoText.text = `${d.user_id} 已准备`
+    this.infoText.text = `${d.nickname} 已准备`
   }
 
   private onGameStart(d: any): void {
@@ -129,7 +129,7 @@ export class RoomScene extends Scene {
   }
 
   private onRobLandlord(d: any): void {
-    this.infoText.text = `${d.nickname || d.user_id} ${d.rob ? '抢地主!' : '不抢'}`
+    this.infoText.text = `${d.nickname} ${d.rob ? '抢地主!' : '不抢'}`
     this.renderCallButtons()
   }
 
@@ -150,7 +150,7 @@ export class RoomScene extends Scene {
   private onCardPlayed(d: any): void {
     this.lastPlay = { userId: d.user_id as string, cards: d.cards as string[], cardType: d.card_type as string }
     this.playArea.removeChildren()
-    this.renderPlayedCards(d.user_id as string, d.cards as string[], d.card_type as string)
+    this.renderPlayedCards(d.nickname as string, d.cards as string[], d.card_type as string)
 
     const p = this.players.find(p => p.userId === d.user_id)
     if (p) p.handCount = d.remain as number
@@ -160,7 +160,7 @@ export class RoomScene extends Scene {
   private onPlayerPass(d: any): void {
     this.playArea.removeChildren()
     const t = new Text({
-      text: `${d.user_id} 不出`,
+      text: `${d.nickname} 不出`,
       style: new TextStyle({ fontFamily: 'Arial', fontSize: 20, fill: '#ff9999' }),
     })
     t.anchor.set(0.5)
@@ -331,7 +331,7 @@ export class RoomScene extends Scene {
     })
   }
 
-  private renderPlayedCards(userId: string, cards: string[], cardType: string): void {
+  private renderPlayedCards(nickname: string, cards: string[], cardType: string): void {
     const { width, height } = this.app.screen
     const startX = width / 2 - (cards.length * 35) / 2
     cards.forEach((card, i) => {
@@ -341,7 +341,7 @@ export class RoomScene extends Scene {
       this.playArea.addChild(c)
     })
     const t = new Text({
-      text: `${userId}: ${cardType}`,
+      text: `${nickname}: ${cardType}`,
       style: new TextStyle({ fontFamily: 'Arial', fontSize: 14, fill: '#cccccc' }),
     })
     t.anchor.set(0.5)
