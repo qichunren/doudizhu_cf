@@ -4,7 +4,7 @@
 
 ## 功能特性
 
-- **账号系统** — 注册/登录，密码 SHA-256 加密存储，localStorage 保持登录态
+- **账号系统** — HTTP JSON API 注册/登录，密码 SHA-256 加密存储于 D1，localStorage 保持登录态
 - **房间系统** — 创建房间（可设密码）、加入房间、房间列表滚动浏览
 - **匹配系统** — 快速匹配对手，取消匹配
 - **完整斗地主规则**
@@ -21,43 +21,60 @@
 | 层 | 技术 |
 |---|---|
 | 运行时 | [Cloudflare Workers](https://workers.cloudflare.com/) + [Durable Objects](https://developers.cloudflare.com/durable-objects/) |
+| 数据库 | [D1](https://developers.cloudflare.com/d1/) (SQLite) |
 | 服务端框架 | [Hono](https://hono.dev/) |
 | 前端框架 | [Vite](https://vitejs.dev/) + [Pixi.js](https://pixijs.com/) v8 |
-| 通信协议 | WebSocket — JSON 消息 |
+| 通信协议 | HTTP JSON API (认证) + WebSocket (游戏) |
 | 包管理 | npm workspaces |
 
 ## 架构概览
 
 ```
-┌──────────────┐     WebSocket      ┌─────────────────────────────┐
-│   Browser    │ ─────────────────→  │  LobbyDO (global singleton) │
-│  (Pixi.js)   │                    │  - 认证 / 注册              │
-│              │                    │  - 房间列表                 │
-│              │                    │  - 创建 / 加入房间          │
-│              │                    │  - 快速匹配                 │
-│              │                    └──────────┬──────────────────┘
-│              │                               │
-│              │     WebSocket      ┌──────────▼──────────────────┐
-│              │ ─────────────────→  │  RoomDO (per-room instance)│
-│              │                    │  - 游戏状态机               │
-│              │                    │  - 发牌 / 叫地主 / 出牌    │
-│              │                    │  - 校验 & 结算              │
-│              │                    └─────────────────────────────┘
+┌──────────────┐     HTTP POST       ┌──────────────┐
+│   Browser    │ ─────────────────→  │  Worker      │
+│  (Pixi.js)   │    /api/register    │  (index.ts)  │
+│              │    /api/login       │      │       │
+│              │                     │      ▼       │
+│              │                     │  ┌──────┐    │
+│              │                     │  │  D1  │    │
+│              │                     │  └──────┘    │
+│              │                     └──────────────┘
+│              │
+│              │     WebSocket       ┌─────────────────────────────┐
+│              │ ─────────────────→  │  LobbyDO (global singleton) │
+│              │     /ws             │  - 房间列表                 │
+│              │                     │  - 创建 / 加入房间          │
+│              │                     │  - 快速匹配                 │
+│              │                     └──────────┬──────────────────┘
+│              │                                │
+│              │     WebSocket       ┌──────────▼──────────────────┐
+│              │ ─────────────────→  │  RoomDO (per-room instance) │
+│              │     /room/:id       │  - 游戏状态机               │
+│              │                     │  - 发牌 / 叫地主 / 出牌    │
+│              │                     │  - 校验 & 结算              │
+│              │                     └─────────────────────────────┘
 ```
 
-- **LobbyDO** — 全局唯一的 Durable Object，处理 WebSocket 握手、用户认证、房间 CRUD 和匹配队列
+- **Worker** — 处理认证 API (`POST /api/register`, `POST /api/login`)，直接读写 D1 数据库
+- **LobbyDO** — 全局唯一的 Durable Object，处理 WebSocket 握手、房间 CRUD 和匹配队列（token 校验查 D1）
 - **RoomDO** — 每个房间一个独立的 Durable Object，运行完整的游戏状态机（发牌 → 叫地主 → 出牌 → 结算）
-- 客户端先连接 `/ws` 进入 LobbyDO，加入房间后通过 `/room/:id` 连接到具体 RoomDO
+- 客户端先通过 HTTP API 完成登录/注册获取 token，再连接 `/ws` 进入 LobbyDO，加入房间后通过 `/room/:id` 连接到具体 RoomDO
 
 ## 项目结构
 
 ```
 doudizhu_cf/
+├── migrations/                   # D1 数据库迁移
+│   └── 0001_init.sql             # 建表：users, sessions
 ├── src/                          # 服务端 (Cloudflare Worker)
-│   ├── index.ts                  # Hono 入口：WS 升级、房间路由
-│   ├── lobby.ts                  # LobbyDO：用户认证、房间管理、匹配
+│   ├── index.ts                  # Hono 入口：HTTP API + WS 升级 + 房间路由
+│   ├── lobby.ts                  # LobbyDO：房间管理、匹配
 │   ├── room.ts                   # RoomDO：完整游戏逻辑
-│   ├── types.ts                  # Env 类型定义 (LOBBY_DO, ROOM_DO)
+│   ├── types.ts                  # Env 类型定义 (LOBBY_DO, ROOM_DO, DB)
+│   ├── api/
+│   │   ├── types.ts              # UserData, SessionData 接口
+│   │   ├── utils.ts              # 工具函数 (generateId, hashPassword)
+│   │   └── auth.ts               # 注册/登录业务逻辑 (直接操作 D1)
 │   ├── game/
 │   │   ├── card.ts               # Card/Suit/CardType 枚举与序列化
 │   │   ├── classifier.ts         # classifyCards() — 牌型识别
@@ -91,9 +108,23 @@ doudizhu_cf/
 
 ## 本地开发
 
+### 前置条件
+
 ```bash
-# 1. 安装依赖
+# 安装依赖
 npm install
+
+# 创建 D1 数据库（首次）
+npx wrangler d1 create doudizhu-db
+
+# 将输出的 database_id 填入 wrangler.toml 的 [[d1_databases]] 中
+```
+
+### 运行
+
+```bash
+# 1. 应用 D1 数据库迁移（本地）
+npx wrangler d1 migrations apply doudizhu-db --local
 
 # 2. 启动服务端 (wrangler dev)
 npm run dev
@@ -136,12 +167,31 @@ interface Push {
 }
 ```
 
-### 请求动作 (Client → Server)
+### HTTP API (认证)
+
+注册和登录走 HTTP JSON API，不经过 WebSocket。
+
+| Method | Path | Body | 说明 |
+|---|---|---|---|
+| `POST` | `/api/register` | `{ account, password, nickname }` | 注册账号 |
+| `POST` | `/api/login` | `{ account, password }` | 登录，返回 token |
+
+响应格式：
+
+```json
+{
+  "code": 0,
+  "message": "ok",
+  "data": { "user_id": "...", "token": "...", "nickname": "...", "score": 1000 }
+}
+```
+
+错误时 `code` 为非零值，`message` 为错误描述。
+
+### 请求动作 (Client → Server via WebSocket)
 
 | Action | 说明 |
 |---|---|
-| `register` | 注册账号 (account, password, nickname) |
-| `login` | 登录 (account, password) |
 | `get_room_list` | 获取房间列表 |
 | `create_room` | 创建房间 (title, password?) |
 | `join_room` | 加入房间 (roomId, password?) |
@@ -232,11 +282,14 @@ interface Push {
 # 构建前端
 npm run build
 
+# 应用 D1 数据库迁移（生产）
+npx wrangler d1 migrations apply doudizhu-db
+
 # 部署到 Cloudflare
 npm run deploy
 ```
 
-需要先配置 `wrangler.toml` 中的 `account_id`，或通过 `wrangler login` 登录。
+需要先配置 `wrangler.toml` 中的 `account_id`，或通过 `wrangler login` 登录。首次部署前需通过 `wrangler d1 create doudizhu-db` 创建数据库并更新 `wrangler.toml` 中的 `database_id`。
 
 ## 开发计划
 

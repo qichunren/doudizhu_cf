@@ -4,6 +4,9 @@ import { MainMenuScene } from './scenes/MainMenuScene'
 import { RoomScene } from './scenes/RoomScene'
 import { WebSocketManager } from './core/WebSocketManager'
 
+const CodeOK = 0
+const CodeUserNotFound = 4001
+
 interface UserInfo {
   userId: string
   token: string
@@ -75,38 +78,49 @@ async function handleLogin() {
   loginBtn.textContent = '登录中...'
   loginError.textContent = ''
 
-  const ws = new WebSocketManager()
   try {
-    await ws.connect('/ws')
-    const res = await ws.send('login', { account, password })
-    userInfo = {
-      userId: res.user_id as string,
-      token: res.token as string,
-      nickname: (res.nickname as string) || nickname,
+    const loginRes = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account, password }),
+    })
+    const loginData = await loginRes.json()
+
+    if (loginData.code === CodeOK) {
+      userInfo = {
+        userId: loginData.data.user_id,
+        token: loginData.data.token,
+        nickname: loginData.data.nickname || nickname,
+      }
+      saveUserInfo(userInfo)
+      startGame()
+      return
     }
-    saveUserInfo(userInfo)
-    ws.disconnect()
-    startGame()
-  } catch (e: any) {
-    if (e.message === 'user not found') {
-      try {
-        const ws2 = new WebSocketManager()
-        await ws2.connect('/ws')
-        const res = await ws2.send('register', { account, password, nickname })
+
+    if (loginData.code === CodeUserNotFound) {
+      const regRes = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account, password, nickname }),
+      })
+      const regData = await regRes.json()
+
+      if (regData.code === CodeOK) {
         userInfo = {
-          userId: res.user_id as string,
-          token: res.token as string,
+          userId: regData.data.user_id,
+          token: regData.data.token,
           nickname: nickname,
         }
         saveUserInfo(userInfo)
-        ws2.disconnect()
         startGame()
-      } catch (e2: any) {
-        loginError.textContent = '注册失败: ' + e2.message
+      } else {
+        loginError.textContent = '注册失败: ' + regData.message
       }
     } else {
-      loginError.textContent = '登录失败: ' + e.message
+      loginError.textContent = '登录失败: ' + loginData.message
     }
+  } catch (e: any) {
+    loginError.textContent = '网络错误: ' + e.message
   } finally {
     loginBtn.disabled = false
     loginBtn.textContent = '登录 / 注册'

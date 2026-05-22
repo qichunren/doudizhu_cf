@@ -11,6 +11,11 @@ class_name = "LobbyDO"
 name = "ROOM_DO"
 class_name = "RoomDO"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "doudizhu-db"
+database_id = "local-dev"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["LobbyDO", "RoomDO"]
