@@ -11,6 +11,7 @@ interface UserInfo {
 }
 
 const STORAGE_KEY = 'doudizhu_user_info'
+const ROOM_STORAGE_KEY = 'doudizhu_current_room_id'
 
 function loadUserInfo(): UserInfo | null {
   try {
@@ -31,6 +32,18 @@ function saveUserInfo(info: UserInfo) {
 
 function clearUserInfo() {
   localStorage.removeItem(STORAGE_KEY)
+}
+
+function loadRoomId(): string | null {
+  return localStorage.getItem(ROOM_STORAGE_KEY)
+}
+
+function saveRoomId(roomId: string) {
+  localStorage.setItem(ROOM_STORAGE_KEY, roomId)
+}
+
+function clearRoomId() {
+  localStorage.removeItem(ROOM_STORAGE_KEY)
 }
 
 let userInfo: UserInfo | null = loadUserInfo()
@@ -124,7 +137,13 @@ async function startGame() {
   sm.add('menu', menuScene)
   sm.add('room', roomScene)
 
-  sm.switchTo('menu')
+  const savedRoomId = loadRoomId()
+  if (savedRoomId) {
+    sm.switchTo('room')
+    roomScene.connectToRoom(savedRoomId, userInfo!.userId, userInfo!.nickname)
+  } else {
+    sm.switchTo('menu')
+  }
 }
 
 loginBtn.addEventListener('click', handleLogin)

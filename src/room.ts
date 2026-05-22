@@ -151,7 +151,7 @@ export class RoomDO implements DurableObject {
   }
 
   private getRoomSnapshot(userId?: string): Record<string, unknown> {
-    return {
+    const snap: Record<string, unknown> = {
       room_id: this.roomId,
       players: this.players.map(p => ({
         user_id: p.userId, nickname: p.nickname, seat: p.seat,
@@ -164,9 +164,16 @@ export class RoomDO implements DurableObject {
       landlord_id: this.landlordId,
       bottom_cards: this.bottomCards.map(cardToString),
       current_turn: this.players[this.currentTurn]?.userId || '',
-      last_play: this.lastPlay,
+      last_play: this.lastPlay ? { ...this.lastPlay, cardType: CardType[this.lastPlay.cardType] } : null,
       multiplier: this.multiplier,
     }
+    if (userId) {
+      const hand = this.hands.get(userId)
+      if (hand) {
+        snap.my_hand = hand.map(cardToString)
+      }
+    }
+    return snap
   }
 
   private async playerReady(ws: WebSocket, msg_id?: string): Promise<void> {

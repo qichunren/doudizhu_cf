@@ -3,6 +3,8 @@ import { Scene, SceneManager } from '../core/SceneManager'
 import { WebSocketManager } from '../core/WebSocketManager'
 import { Button } from '../ui/Button'
 
+const ROOM_STORAGE_KEY = 'doudizhu_current_room_id'
+
 interface PlayerView {
   userId: string
   nickname: string
@@ -92,15 +94,39 @@ export class RoomScene extends Scene {
         }))
         this.renderPlayers()
       }
-      const me = this.players.find(p => p.userId === userId)
-      if (snapshot.status && snapshot.status !== 'waiting') {
-        this.gameState = snapshot.status
+
+      if (snapshot.my_hand) {
+        this.myHand = snapshot.my_hand as string[]
+        this.landlordId = (snapshot.landlord_id as string) || ''
+        this.bottomCards = (snapshot.bottom_cards as string[]) || []
+        this.currentTurn = (snapshot.current_turn as string) || ''
+        this.gameState = (snapshot.status as string) || ''
+        this.lastPlay = snapshot.last_play ? { userId: (snapshot.last_play as any).user_id, cards: (snapshot.last_play as any).cards, cardType: (snapshot.last_play as any).cardType } : null
+        this.multiplier = (snapshot.multiplier as number) || 1
+
+        this.renderHand()
+        this.renderPlayers()
+        this.renderBottomCards(this.bottomCards)
+        if (this.lastPlay) {
+          const p = this.players.find(p => p.userId === this.lastPlay!.userId)
+          this.renderPlayedCards(p?.nickname || '', this.lastPlay.cards, this.lastPlay.cardType)
+        }
+        this.renderPlayButtons()
+      } else {
+        const me = this.players.find(p => p.userId === userId)
+        if (snapshot.status && snapshot.status !== 'waiting') {
+          this.gameState = snapshot.status
+        }
+        if (!me?.ready && (!snapshot.status || snapshot.status === 'waiting')) {
+          this.renderReady()
+        }
       }
-      if (!me?.ready && (!snapshot.status || snapshot.status === 'waiting')) {
-        this.renderReady()
-      }
+
+      localStorage.setItem(ROOM_STORAGE_KEY, this.roomId)
     }).catch((e) => {
-      this.infoText.text = '连接失败: ' + e.message
+      localStorage.removeItem(ROOM_STORAGE_KEY)
+      this.ws.disconnect()
+      this.sm.switchTo('menu')
     })
   }
 
@@ -228,6 +254,7 @@ export class RoomScene extends Scene {
     const backBtn = new Button({
       text: '返回大厅', width: 200,
       onClick: () => {
+        localStorage.removeItem(ROOM_STORAGE_KEY)
         this.ws.disconnect()
         this.sm.switchTo('menu')
       },
