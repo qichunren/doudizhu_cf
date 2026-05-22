@@ -70,7 +70,7 @@ export class RoomScene extends Scene {
     this.cardSprites = []
     this.playerLabels = []
 
-    this.ws.connect(`/room/${roomId}`).then(() => {
+    this.ws.connect(`/room/${roomId}`).then(async () => {
       this.ws.onPush('player_joined', (d) => this.onPlayerJoined(d))
       this.ws.onPush('player_left', (d) => this.onPlayerLeft(d))
       this.ws.onPush('player_ready', (d) => this.onPlayerReady(d))
@@ -82,8 +82,23 @@ export class RoomScene extends Scene {
       this.ws.onPush('turn_changed', (d) => this.onTurnChanged(d))
       this.ws.onPush('game_over', (d) => this.onGameOver(d))
 
-      this.ws.send('join_room_confirm', { user_id: userId, nickname })
-      this.renderReady()
+      const resp = await this.ws.send('join_room_confirm', { user_id: userId, nickname })
+      const snapshot = resp as any
+      if (snapshot.players) {
+        this.players = (snapshot.players as any[]).map((p: any) => ({
+          userId: p.user_id, nickname: p.nickname, seat: p.seat,
+          handCount: p.hand_count || 0, isLandlord: p.is_landlord || false,
+          ready: p.ready || false, online: p.online !== false,
+        }))
+        this.renderPlayers()
+      }
+      const me = this.players.find(p => p.userId === userId)
+      if (snapshot.status && snapshot.status !== 'waiting') {
+        this.gameState = snapshot.status
+      }
+      if (!me?.ready && (!snapshot.status || snapshot.status === 'waiting')) {
+        this.renderReady()
+      }
     }).catch((e) => {
       this.infoText.text = '连接失败: ' + e.message
     })
@@ -102,6 +117,10 @@ export class RoomScene extends Scene {
 
   private onPlayerJoined(d: any): void {
     this.infoText.text = `${d.nickname} 加入了房间`
+    if (!this.players.find(p => p.userId === d.user_id)) {
+      this.players.push({ userId: d.user_id, nickname: d.nickname, seat: d.seat, handCount: 0, isLandlord: false, ready: false, online: true })
+    }
+    this.renderPlayers()
   }
 
   private onPlayerLeft(d: any): void {

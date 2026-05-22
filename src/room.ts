@@ -128,7 +128,9 @@ export class RoomDO implements DurableObject {
     if (existing) {
       existing.ws = ws
       existing.isOnline = true
+      existing.nickname = data.nickname
       ws.send(JSON.stringify({ msg_id, action: ActionJoinRoomConfirm, code: CodeOK, message: 'ok', data: this.getRoomSnapshot(data.user_id) }))
+      this.broadcast({ action: PushPlayerJoined, data: { user_id: data.user_id, nickname: data.nickname, seat: existing.seat } }, ws)
       return
     }
 
