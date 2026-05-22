@@ -14,7 +14,7 @@ class_name = "RoomDO"
 [[d1_databases]]
 binding = "DB"
 database_name = "doudizhu-db"
-database_id = "22154487-d775-4be7-8362-12e46137e2c8"
+database_id = "local-dev"
 
 [[migrations]]
 tag = "v1"
@@ -22,3 +22,10 @@ new_sqlite_classes = ["LobbyDO", "RoomDO"]
 
 [env.dev]
 vars = { ENVIRONMENT = "dev" }
+
+[env.prod]
+vars = { ENVIRONMENT = "prod" }
+[[env.prod.d1_databases]]
+binding = "DB"
+database_name = "doudizhu-db"
+database_id = "22154487-d775-4be7-8362-12e46137e2c8"
