@@ -10,7 +10,30 @@ interface UserInfo {
   nickname: string
 }
 
-let userInfo: UserInfo | null = null
+const STORAGE_KEY = 'doudizhu_user_info'
+
+function loadUserInfo(): UserInfo | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) {
+      const data = JSON.parse(raw) as UserInfo
+      if (data.userId && data.token && data.nickname) {
+        return data
+      }
+    }
+  } catch {}
+  return null
+}
+
+function saveUserInfo(info: UserInfo) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(info))
+}
+
+function clearUserInfo() {
+  localStorage.removeItem(STORAGE_KEY)
+}
+
+let userInfo: UserInfo | null = loadUserInfo()
 
 const loginPage = document.getElementById('login-page')!
 const gameDiv = document.getElementById('game')!
@@ -19,6 +42,11 @@ const passwordInput = document.getElementById('password') as HTMLInputElement
 const nicknameInput = document.getElementById('nickname') as HTMLInputElement
 const loginBtn = document.getElementById('login-btn') as HTMLButtonElement
 const loginError = document.getElementById('login-error')!
+
+if (userInfo) {
+  loginPage.classList.add('hidden')
+  startGame()
+}
 
 async function handleLogin() {
   const account = accountInput.value.trim()
@@ -43,6 +71,7 @@ async function handleLogin() {
       token: res.token as string,
       nickname: (res.nickname as string) || nickname,
     }
+    saveUserInfo(userInfo)
     ws.disconnect()
     startGame()
   } catch (e: any) {
@@ -56,6 +85,7 @@ async function handleLogin() {
           token: res.token as string,
           nickname: nickname,
         }
+        saveUserInfo(userInfo)
         ws2.disconnect()
         startGame()
       } catch (e2: any) {
