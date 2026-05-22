@@ -1,0 +1,19 @@
+name = "doudizhu"
+main = "src/index.ts"
+assets = { directory = "./dist" }
+compatibility_date = "2025-04-01"
+
+[[durable_objects.bindings]]
+name = "LOBBY_DO"
+class_name = "LobbyDO"
+
+[[durable_objects.bindings]]
+name = "ROOM_DO"
+class_name = "RoomDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["LobbyDO", "RoomDO"]
+
+[env.dev]
+vars = { ENVIRONMENT = "dev" }

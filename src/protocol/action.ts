@@ -1,0 +1,30 @@
+// Lobby actions
+export const ActionRegister = 'register'
+export const ActionLogin = 'login'
+export const ActionGetRoomList = 'get_room_list'
+export const ActionCreateRoom = 'create_room'
+export const ActionJoinRoom = 'join_room'
+export const ActionMatch = 'match'
+export const ActionCancelMatch = 'cancel_match'
+
+// Room actions
+export const ActionJoinRoomConfirm = 'join_room_confirm'
+export const ActionReady = 'ready'
+export const ActionLeaveRoom = 'leave_room'
+export const ActionRobLandlord = 'rob_landlord'
+export const ActionPlayCard = 'play_card'
+export const ActionPass = 'pass'
+export const ActionReconnect = 'reconnect'
+
+// Server push events
+export const PushPlayerJoined = 'player_joined'
+export const PushPlayerLeft = 'player_left'
+export const PushPlayerReady = 'player_ready'
+export const PushGameStart = 'game_start'
+export const PushLandlordConfirm = 'landlord_confirmed'
+export const PushCardPlayed = 'card_played'
+export const PushPlayerPass = 'player_pass'
+export const PushTurnChanged = 'turn_changed'
+export const PushGameOver = 'game_over'
+export const PushRoomClosed = 'room_closed'
+export const PushRobLandlord = 'rob_landlord'
