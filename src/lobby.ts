@@ -195,7 +195,18 @@ export class LobbyDO implements DurableObject {
   }
 
   private getRoomList(): Record<string, unknown> {
-    const roomList = Array.from(this.rooms.values()).filter(r => r.status !== 'closed')
+    const roomList = Array.from(this.rooms.values())
+      .filter(r => r.status !== 'closed')
+      .map(r => ({
+        room_id: r.roomId,
+        title: r.title,
+        owner_id: r.ownerId,
+        player_count: r.playerCount,
+        max_players: r.maxPlayers,
+        status: r.status,
+        need_password: r.needPassword,
+        do_id: r.doId,
+      }))
     return { rooms: roomList, total: roomList.length }
   }
 
