@@ -283,13 +283,13 @@ interface Push {
 npm run build
 
 # 应用 D1 数据库迁移（生产）
-npx wrangler d1 migrations apply doudizhu-db
+npx wrangler d1 migrations apply doudizhu-db --env prod
 
 # 部署到 Cloudflare
-npm run deploy
+npm run deploy -- --env prod
 ```
 
-需要先配置 `wrangler.toml` 中的 `account_id`，或通过 `wrangler login` 登录。首次部署前需通过 `wrangler d1 create doudizhu-db` 创建数据库并更新 `wrangler.toml` 中的 `database_id`。
+需要先配置 `wrangler.toml` 中的 `account_id`，或通过 `wrangler login` 登录。首次部署前需通过 `wrangler d1 create doudizhu-db` 创建数据库并更新 `wrangler.toml` 中 `[env.prod]` 下的 `database_id`。
 
 ## 开发计划
 
