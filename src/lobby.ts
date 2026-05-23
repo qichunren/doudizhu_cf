@@ -1,11 +1,11 @@
 import { Env } from './types'
-import { generateId } from './api/utils'
+import { generateId, hashPassword } from './api/utils'
 import {
-  ActionGetRoomList, ActionCreateRoom, ActionJoinRoom,
+  ActionGetRoomList, ActionCreateRoom, ActionJoinRoom, ActionRemoveRoom,
 } from './protocol/action'
 import {
   CodeOK, CodeInvalidAction, CodeServerError, CodeUnauthorized,
-  CodeRoomNotFound, CodeRoomFull, CodeRoomAlreadyStart,
+  CodeRoomNotFound, CodeRoomFull, CodeRoomAlreadyStart, CodeRoomPasswordWrong,
   errorMessages,
 } from './protocol/error'
 
@@ -19,7 +19,9 @@ interface WSMsg {
 interface RoomMeta {
   roomId: string
   title: string
+  password: string
   ownerId: string
+  ownerNickname: string
   playerCount: number
   maxPlayers: number
   status: string
@@ -46,10 +48,24 @@ export class LobbyDO implements DurableObject {
   }
 
   async fetch(request: Request): Promise<Response> {
-    if (request.headers.get('Upgrade') !== 'websocket') {
-      return new Response('Expected WebSocket', { status: 426 })
+    if (request.headers.get('Upgrade') === 'websocket') {
+      return this.handleWebSocket(request)
     }
+    // Internal JSON API (called by RoomDO)
+    const body = await request.json() as { action: string; room_id: string }
+    if (body.action === ActionRemoveRoom) {
+      const meta = this.rooms.get(body.room_id)
+      if (meta) {
+        meta.status = 'closed'
+        this.rooms.delete(body.room_id)
+        await this.state.storage?.delete(`room:${body.room_id}`)
+      }
+      return Response.json({ code: CodeOK })
+    }
+    return Response.json({ code: CodeInvalidAction }, { status: 400 })
+  }
 
+  private async handleWebSocket(request: Request): Promise<Response> {
     const pair = new WebSocketPair()
     const [client, server] = Object.values(pair)
     server.accept()
@@ -62,8 +78,6 @@ export class LobbyDO implements DurableObject {
         server.send(JSON.stringify({ code: CodeServerError, message: errorMessages[CodeServerError] }))
       }
     })
-
-    server.addEventListener('close', () => {})
 
     return new Response(null, { status: 101, webSocket: client })
   }
@@ -80,10 +94,10 @@ export class LobbyDO implements DurableObject {
           respData = this.getRoomList()
           break
         case ActionCreateRoom:
-          respData = await this.createRoom(data as { title?: string; user_id: string; token: string })
+          respData = await this.createRoom(data as { title?: string; password?: string; nickname: string; user_id: string; token: string })
           break
         case ActionJoinRoom:
-          respData = await this.joinRoom(data as { room_id: string; user_id: string; token: string })
+          respData = await this.joinRoom(data as { room_id: string; password?: string; user_id: string; token: string })
           break
         default:
           code = CodeInvalidAction
@@ -104,6 +118,7 @@ export class LobbyDO implements DurableObject {
         room_id: r.roomId,
         title: r.title,
         owner_id: r.ownerId,
+        owner_nickname: r.ownerNickname,
         player_count: r.playerCount,
         max_players: r.maxPlayers,
         status: r.status,
@@ -113,7 +128,7 @@ export class LobbyDO implements DurableObject {
     return { rooms: roomList, total: roomList.length }
   }
 
-  private async createRoom(data: { title?: string; user_id: string; token: string }): Promise<Record<string, unknown>> {
+  private async createRoom(data: { title?: string; password?: string; nickname: string; user_id: string; token: string }): Promise<Record<string, unknown>> {
     const session = await this.env.DB.prepare(
       'SELECT token FROM sessions WHERE user_id = ?',
     ).bind(data.user_id).first<{ token: string }>()
@@ -123,19 +138,23 @@ export class LobbyDO implements DurableObject {
 
     const roomId = generateId('r')
     const doId = `room:${roomId}`
+    const hashedPassword = data.password ? await hashPassword(data.password) : ''
     const meta: RoomMeta = {
-      roomId, title: data.title || '新手房', ownerId: data.user_id,
+      roomId, title: data.title || '新手房',
+      password: hashedPassword,
+      ownerId: data.user_id,
+      ownerNickname: data.nickname || '',
       playerCount: 0, maxPlayers: 3, status: 'waiting',
-      needPassword: false, doId,
+      needPassword: !!data.password, doId,
     }
 
     this.rooms.set(roomId, meta)
     await this.state.storage?.put(`room:${roomId}`, meta)
 
-    return { room_id: roomId, do_id: doId }
+    return { room_id: roomId, do_id: doId, need_password: !!data.password }
   }
 
-  private async joinRoom(data: { room_id: string; user_id: string; token: string }): Promise<Record<string, unknown>> {
+  private async joinRoom(data: { room_id: string; password?: string; user_id: string; token: string }): Promise<Record<string, unknown>> {
     const session = await this.env.DB.prepare(
       'SELECT token FROM sessions WHERE user_id = ?',
     ).bind(data.user_id).first<{ token: string }>()
@@ -152,6 +171,15 @@ export class LobbyDO implements DurableObject {
     }
     if (meta.status !== 'waiting') {
       throw { code: CodeRoomAlreadyStart, message: errorMessages[CodeRoomAlreadyStart] }
+    }
+    if (meta.needPassword) {
+      if (!data.password) {
+        throw { code: CodeRoomPasswordWrong, message: errorMessages[CodeRoomPasswordWrong] }
+      }
+      const inputHash = await hashPassword(data.password)
+      if (inputHash !== meta.password) {
+        throw { code: CodeRoomPasswordWrong, message: errorMessages[CodeRoomPasswordWrong] }
+      }
     }
 
     meta.playerCount++

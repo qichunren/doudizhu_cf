@@ -30,6 +30,7 @@ export const errorMessages: Record<number, string> = {
   [CodeUnauthorized]: 'unauthorized',
   [CodeRoomNotFound]: 'room not found',
   [CodeRoomFull]: 'room is full',
+  [CodeRoomPasswordWrong]: 'wrong password',
   [CodeRoomAlreadyStart]: 'game already started',
   [CodeNotYourTurn]: 'not your turn',
   [CodeInvalidCards]: 'invalid cards',
