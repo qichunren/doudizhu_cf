@@ -7,13 +7,15 @@ import { GameState, gameStateString } from './game/statemachine'
 import {
   ActionJoinRoomConfirm, ActionReady, ActionLeaveRoom,
   ActionRobLandlord, ActionPlayCard, ActionPass,
+  ActionKickPlayer, ActionCloseRoom,
   PushPlayerJoined, PushPlayerLeft, PushPlayerReady,
   PushGameStart, PushLandlordConfirm, PushCardPlayed,
   PushPlayerPass, PushTurnChanged, PushGameOver,
-  PushRoomClosed, PushRobLandlord,
+  PushRoomClosed, PushRobLandlord, PushPlayerKicked,
 } from './protocol/action'
+import { ActionRemoveRoom } from './protocol/action'
 import {
-  CodeOK, CodeInvalidAction, CodeInvalidParams, CodeNotYourTurn,
+  CodeOK, CodeInvalidAction, CodeInvalidParams, CodeUnauthorized, CodeNotYourTurn,
   CodeInvalidCards, CodeCardsNotBeat, CodeServerError, errorMessages,
 } from './protocol/error'
 
@@ -43,7 +45,9 @@ interface PlayLog {
 
 export class RoomDO implements DurableObject {
   private state: DurableObjectState
+  private env: Env
   private roomId = ''
+  private ownerId = ''
   private players: PlayerInfo[] = []
   private gameState: GameState = GameState.Dealing
   private hands = new Map<string, Card[]>()
@@ -59,6 +63,7 @@ export class RoomDO implements DurableObject {
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state
+    this.env = env
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -115,6 +120,10 @@ export class RoomDO implements DurableObject {
           return this.playCard(data as { cards: string[] }, ws, msg_id)
         case ActionPass:
           return this.playerPass(ws, msg_id)
+        case ActionKickPlayer:
+          return this.kickPlayer(data as { user_id: string; target_user_id: string }, ws, msg_id)
+        case ActionCloseRoom:
+          return this.closeRoom(ws, msg_id)
         default:
           ws.send(JSON.stringify({ msg_id, action, code: CodeInvalidAction, message: errorMessages[CodeInvalidAction] }))
       }
@@ -140,6 +149,10 @@ export class RoomDO implements DurableObject {
     }
 
     const seat = this.players.length
+    const isOwner = this.players.length === 0
+    if (isOwner) {
+      this.ownerId = data.user_id
+    }
     const player: PlayerInfo = {
       userId: data.user_id, nickname: data.nickname,
       seat, isReady: false, isOnline: true, ws,
@@ -147,7 +160,7 @@ export class RoomDO implements DurableObject {
     this.players.push(player)
 
     ws.send(JSON.stringify({ msg_id, action: ActionJoinRoomConfirm, code: CodeOK, message: 'ok', data: this.getRoomSnapshot(data.user_id) }))
-    this.broadcast({ action: PushPlayerJoined, data: { user_id: data.user_id, nickname: data.nickname, seat } }, ws)
+    this.broadcast({ action: PushPlayerJoined, data: { user_id: data.user_id, nickname: data.nickname, seat, is_owner: isOwner } }, ws)
   }
 
   private getRoomSnapshot(userId?: string): Record<string, unknown> {
@@ -157,6 +170,7 @@ export class RoomDO implements DurableObject {
         user_id: p.userId, nickname: p.nickname, seat: p.seat,
         hand_count: this.hands.get(p.userId)?.length || 0,
         is_landlord: p.userId === this.landlordId,
+        is_owner: p.userId === this.ownerId,
         ready: p.isReady,
         online: p.isOnline,
       })),
@@ -414,7 +428,71 @@ export class RoomDO implements DurableObject {
     ws.send(JSON.stringify({ msg_id, action: ActionLeaveRoom, code: CodeOK, message: 'ok' }))
 
     if (this.players.length === 0) {
-      this.broadcast({ action: PushRoomClosed, data: { reason: 'all players left' } })
+      await this.notifyLobbyRemoveRoom()
+    }
+  }
+
+  private async kickPlayer(data: { user_id: string; target_user_id: string }, ws: WebSocket, msg_id?: string): Promise<void> {
+    const p = this.findPlayer(ws)
+    if (!p || p.userId !== this.ownerId) {
+      ws.send(JSON.stringify({ msg_id, action: ActionKickPlayer, code: CodeUnauthorized, message: errorMessages[CodeUnauthorized] }))
+      return
+    }
+    if (data.target_user_id === this.ownerId) {
+      ws.send(JSON.stringify({ msg_id, action: ActionKickPlayer, code: CodeInvalidParams, message: 'cannot kick yourself' }))
+      return
+    }
+
+    const targetIdx = this.players.findIndex(pl => pl.userId === data.target_user_id)
+    if (targetIdx === -1) {
+      ws.send(JSON.stringify({ msg_id, action: ActionKickPlayer, code: CodeInvalidParams, message: 'player not found' }))
+      return
+    }
+
+    const target = this.players[targetIdx]
+    try {
+      target.ws.send(JSON.stringify({ action: PushPlayerKicked, data: { user_id: target.userId, nickname: target.nickname } }))
+      target.ws.close()
+    } catch {}
+    this.players.splice(targetIdx, 1)
+    this.broadcast({ action: PushPlayerLeft, data: { user_id: target.userId } })
+    ws.send(JSON.stringify({ msg_id, action: ActionKickPlayer, code: CodeOK, message: 'ok' }))
+
+    if (this.players.length === 0) {
+      await this.closeRoomInternal('room closed (all players left)')
+    }
+  }
+
+  private async closeRoom(ws: WebSocket, msg_id?: string): Promise<void> {
+    const p = this.findPlayer(ws)
+    if (!p || p.userId !== this.ownerId) {
+      ws.send(JSON.stringify({ msg_id, action: ActionCloseRoom, code: CodeUnauthorized, message: errorMessages[CodeUnauthorized] }))
+      return
+    }
+
+    await this.closeRoomInternal('room closed by owner')
+    ws.send(JSON.stringify({ msg_id, action: ActionCloseRoom, code: CodeOK, message: 'ok' }))
+  }
+
+  private async closeRoomInternal(reason: string): Promise<void> {
+    this.broadcast({ action: PushRoomClosed, data: { reason } })
+    for (const pl of this.players) {
+      try { pl.ws.close() } catch {}
+    }
+    this.players = []
+    await this.notifyLobbyRemoveRoom()
+  }
+
+  private async notifyLobbyRemoveRoom(): Promise<void> {
+    try {
+      const doId = this.env.LOBBY_DO.idFromName('global')
+      const stub = this.env.LOBBY_DO.get(doId)
+      await stub.fetch('http://internal', {
+        method: 'POST',
+        body: JSON.stringify({ action: ActionRemoveRoom, room_id: this.roomId }),
+      })
+    } catch (e) {
+      console.error('Failed to notify LobbyDO:', e)
     }
   }
 
