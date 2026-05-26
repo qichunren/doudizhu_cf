@@ -22,6 +22,7 @@ export class RoomScene extends Scene {
   private roomId = ''
   private userId = ''
   private nickname = ''
+  private ownerId = ''
   private myHand: string[] = []
   private players: PlayerView[] = []
   private landlordId = ''
@@ -83,6 +84,8 @@ export class RoomScene extends Scene {
       this.ws.onPush('player_pass', (d) => this.onPlayerPass(d))
       this.ws.onPush('turn_changed', (d) => this.onTurnChanged(d))
       this.ws.onPush('game_over', (d) => this.onGameOver(d))
+      this.ws.onPush('room_closed', (d) => this.onRoomClosed(d))
+      this.ws.onPush('player_kicked', (d) => this.onPlayerKicked(d))
 
       const resp = await this.ws.send('join_room_confirm', { user_id: userId, nickname })
       const snapshot = resp as any
@@ -92,6 +95,8 @@ export class RoomScene extends Scene {
           handCount: p.hand_count || 0, isLandlord: p.is_landlord || false,
           ready: p.ready || false, online: p.online !== false,
         }))
+        const owner = (snapshot.players as any[]).find((p: any) => p.is_owner)
+        if (owner) this.ownerId = owner.user_id
         this.renderPlayers()
       }
 
@@ -226,6 +231,20 @@ export class RoomScene extends Scene {
     this.renderPlayButtons()
   }
 
+  private onRoomClosed(d: any): void {
+    alert('房间已关闭: ' + (d.reason || ''))
+    localStorage.removeItem(ROOM_STORAGE_KEY)
+    this.ws.disconnect()
+    this.sm.switchTo('menu')
+  }
+
+  private onPlayerKicked(d: any): void {
+    alert('你已被房主踢出房间')
+    localStorage.removeItem(ROOM_STORAGE_KEY)
+    this.ws.disconnect()
+    this.sm.switchTo('menu')
+  }
+
   private onGameOver(d: any): void {
     this.gameState = 'settling'
     this.actionContainer.removeChildren()
@@ -269,7 +288,7 @@ export class RoomScene extends Scene {
     this.handContainer.removeChildren()
     this.cardSprites = []
 
-    const sorted = [...new Set(this.myHand)].sort((a, b) => {
+    const sorted = [...this.myHand].sort((a, b) => {
       const rankOrder: Record<string, number> = {
         '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
         '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14, '2': 15,
@@ -436,6 +455,8 @@ export class RoomScene extends Scene {
         this.selectedCards.clear()
         this.renderHand()
       }).catch((e) => {
+        this.selectedCards.clear()
+        this.renderHand()
         this.infoText.text = e.message
       })
     }})

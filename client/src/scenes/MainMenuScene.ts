@@ -20,6 +20,7 @@ export class MainMenuScene extends Scene {
   private token: string
   private nickname: string
   private onJoinRoom: (roomId: string) => void
+  private refreshInterval: number | null = null
 
   constructor(
     app: Application,
@@ -44,8 +45,18 @@ export class MainMenuScene extends Scene {
     try {
       await this.ws.connect('/ws')
       this.loadRoomList()
+      this.refreshInterval = window.setInterval(() => {
+        this.loadRoomList()
+      }, 8000)
     } catch (e) {
       console.error('Failed to connect to lobby', e)
+    }
+  }
+
+  onExit(): void {
+    if (this.refreshInterval !== null) {
+      clearInterval(this.refreshInterval)
+      this.refreshInterval = null
     }
   }
 
@@ -68,8 +79,13 @@ export class MainMenuScene extends Scene {
     const createBtn = new Button({
       text: '创建房间', width: 240,
       onClick: async () => {
+        const password = prompt('房间密码（可选，留空则公开）:') || ''
         try {
-          const res = await this.ws.send('create_room', { title: '新手房', user_id: this.userId, token: this.token })
+          const res = await this.ws.send('create_room', {
+            title: '新手房', password,
+            nickname: this.nickname,
+            user_id: this.userId, token: this.token,
+          })
           const roomId = res.room_id as string
           this.ws.disconnect()
           this.onJoinRoom(roomId)
@@ -147,8 +163,10 @@ export class MainMenuScene extends Scene {
         bg.roundRect(0, 0, 300, 50, 8)
         bg.fill({ color: 0x2d8c4e })
 
+        const lockIcon = room.need_password ? ' 🔒' : ''
+        const ownerName = room.owner_nickname ? ` ${room.owner_nickname}` : ''
         const text = new Text({
-          text: `${room.title} (${room.player_count}/3)`,
+          text: `${room.title} (${room.player_count}/3)${lockIcon}${ownerName}`,
           style: new TextStyle({ fontFamily: 'Arial', fontSize: 16, fill: '#ffffff' }),
         })
         text.x = 12
@@ -162,7 +180,11 @@ export class MainMenuScene extends Scene {
 
         btn.on('pointertap', async () => {
           try {
-            const res = await this.ws.send('join_room', { room_id: room.room_id, user_id: this.userId, token: this.token })
+            let password = ''
+            if (room.need_password) {
+              password = prompt('请输入房间密码:') || ''
+            }
+            const res = await this.ws.send('join_room', { room_id: room.room_id, password, user_id: this.userId, token: this.token })
             const roomId = res.room_id as string
             this.ws.disconnect()
             this.onJoinRoom(roomId)

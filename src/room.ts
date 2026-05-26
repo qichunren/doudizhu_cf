@@ -64,6 +64,10 @@ export class RoomDO implements DurableObject {
   constructor(state: DurableObjectState, env: Env) {
     this.state = state
     this.env = env
+    const doName = state.id.name
+    if (doName && doName.startsWith('room:')) {
+      this.roomId = doName.slice(5)
+    }
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -124,6 +128,8 @@ export class RoomDO implements DurableObject {
           return this.kickPlayer(data as { user_id: string; target_user_id: string }, ws, msg_id)
         case ActionCloseRoom:
           return this.closeRoom(ws, msg_id)
+        case 'ping':
+          return
         default:
           ws.send(JSON.stringify({ msg_id, action, code: CodeInvalidAction, message: errorMessages[CodeInvalidAction] }))
       }
@@ -359,7 +365,7 @@ export class RoomDO implements DurableObject {
     ws.send(JSON.stringify({ msg_id, action: ActionPlayCard, code: CodeOK, message: 'ok', data: { card_type: CardType[group.cardType] } }))
 
     if (remainCount === 0) {
-      this.finishGame(p.userId)
+      await this.finishGame(p.userId)
       return
     }
 
@@ -395,7 +401,7 @@ export class RoomDO implements DurableObject {
     }
   }
 
-  private finishGame(winnerId: string): void {
+  private async finishGame(winnerId: string): Promise<void> {
     this.gameState = GameState.Settling
 
     const scores: Record<string, number> = {}
@@ -404,6 +410,17 @@ export class RoomDO implements DurableObject {
         scores[p.userId] = p.userId === this.landlordId ? this.multiplier * 2 : -this.multiplier
       } else {
         scores[p.userId] = p.userId === this.landlordId ? -this.multiplier * 2 : this.multiplier
+      }
+    }
+
+    for (const p of this.players) {
+      const delta = scores[p.userId] || 0
+      try {
+        await this.env.DB.prepare(
+          'UPDATE users SET score = score + ? WHERE id = ?',
+        ).bind(delta, p.userId).run()
+      } catch (e) {
+        console.error('Failed to persist score for', p.userId, e)
       }
     }
 

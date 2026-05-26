@@ -99,6 +99,8 @@ export class LobbyDO implements DurableObject {
         case ActionJoinRoom:
           respData = await this.joinRoom(data as { room_id: string; password?: string; user_id: string; token: string })
           break
+        case 'ping':
+          return
         default:
           code = CodeInvalidAction
           message = errorMessages[CodeInvalidAction]
