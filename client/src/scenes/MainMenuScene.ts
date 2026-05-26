@@ -49,7 +49,14 @@ export class MainMenuScene extends Scene {
         this.loadRoomList()
       }, 8000)
     } catch (e) {
-      console.error('Failed to connect to lobby', e)
+      const errText = new Text({
+        text: '无法连接服务器，请检查后端是否启动',
+        style: new TextStyle({ fontFamily: 'Arial', fontSize: 16, fill: '#ff4444' }),
+      })
+      errText.anchor.set(0.5)
+      errText.x = this.app.screen.width / 2
+      errText.y = this.app.screen.height * 0.40
+      this.menuContainer.addChild(errText)
     }
   }
 

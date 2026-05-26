@@ -20,7 +20,7 @@ export function classifyCards(cards: Card[]): CardGroup {
   counts.sort((a, b) => a.rank - b.rank)
 
   const isStraight = (arr: { rank: number; count: number }[]): boolean => {
-    if (arr.length < 5) return false
+    if (arr.length < 2) return false
     for (let i = 1; i < arr.length; i++) {
       if (arr[i].rank !== arr[i - 1].rank + 1) return false
     }
@@ -68,7 +68,7 @@ export function classifyCards(cards: Card[]): CardGroup {
   }
 
   // Straight
-  if (allSameCount(1) && isStraight(counts)) {
+  if (counts.length >= 5 && allSameCount(1) && isStraight(counts)) {
     return { cards: sorted, cardType: CardType.Straight, rank: counts[counts.length - 1].rank, length: counts.length }
   }
 

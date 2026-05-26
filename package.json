@@ -3,10 +3,15 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "workspaces": ["client"],
+  "workspaces": [
+    "client"
+  ],
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "build:client": "cd client && npm run build",
     "build": "npm run build:client"
   },
@@ -15,7 +20,9 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260522.1",
+    "happy-dom": "^20.9.0",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
     "wrangler": "^4.93.1"
   }
 }

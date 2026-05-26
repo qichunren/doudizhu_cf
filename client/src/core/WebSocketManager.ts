@@ -77,6 +77,7 @@ export class WebSocketManager {
 
   disconnect(): void {
     this.stopHeartbeat()
+    this.rejectAll()
     this.ws?.close()
     this.ws = null
   }
