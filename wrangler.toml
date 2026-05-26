@@ -25,6 +25,14 @@ vars = { ENVIRONMENT = "dev" }
 
 [env.prod]
 vars = { ENVIRONMENT = "prod" }
+[[env.prod.durable_objects.bindings]]
+name = "LOBBY_DO"
+class_name = "LobbyDO"
+
+[[env.prod.durable_objects.bindings]]
+name = "ROOM_DO"
+class_name = "RoomDO"
+
 [[env.prod.d1_databases]]
 binding = "DB"
 database_name = "doudizhu-db"
